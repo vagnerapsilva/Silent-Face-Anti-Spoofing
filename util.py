@@ -72,3 +72,15 @@ def recognize(img, db_path):
         return db_dir[j - 1][:-7]
     else:
         return 'unknown_person'
+
+def recognize_face_encoding(face_encoding, db_dir):
+    # Load all the stored face encodings
+    for file in os.listdir(db_dir):
+        if file.endswith('.pickle'):
+            file_path = os.path.join(db_dir, file)
+            with open(file_path, 'rb') as f:
+                stored_encoding = pickle.load(f)
+                match = face_recognition.compare_faces([stored_encoding], face_encoding)
+                if match[0]:
+                    return os.path.splitext(file)[0]  # Return the name (filename without extension)
+    return 'unknown_person'

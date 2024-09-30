@@ -16,7 +16,6 @@ class App:
         self.main_window = tk.Tk()
         self.main_window.geometry("1200x520+350+100")
 
-        # Remove login/logout buttons
         self.register_new_user_button_main_window = util.get_button(self.main_window, 'register new user', 'gray',
                                                                     self.register_new_user, fg='black')
         self.register_new_user_button_main_window.place(x=750, y=400)
@@ -61,20 +60,44 @@ class App:
         self._label.after(500, self.process_webcam)
 
     def recognize_face(self):
-        label = test(
-            image=self.most_recent_capture_arr,
-            model_dir='Silent_Face_Anti_Spoofing/resources/anti_spoof_models',
-            device_id=0
-        )
+        # Detect all face locations in the frame
+        face_locations = face_recognition.face_locations(self.most_recent_capture_arr)
+        face_encodings = face_recognition.face_encodings(self.most_recent_capture_arr, face_locations)
 
-        if label == 1:  # Not a spoof
-            name = util.recognize(self.most_recent_capture_arr, self.db_dir)
+        if len(face_encodings) == 0:
+            self.result_label.config(text="No faces detected", fg="red")
+            return
+
+        # Create a copy of the original frame to draw boxes
+        frame_with_boxes = self.most_recent_capture_arr.copy()
+
+        names = []
+        for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+            # Recognize face by comparing encodings
+            name = util.recognize_face_encoding(face_encoding, self.db_dir)
             if name in ['unknown_person', 'no_persons_found']:
-                self.result_label.config(text="Unknown", fg="red")
-            else:
-                self.result_label.config(text=f"Hello, {name}", fg="green")
-        else:
-            self.result_label.config(text="Spoof detected!", fg="orange")
+                name = "Unknown"
+            
+            names.append(name)
+
+            # Draw a box around the face
+            cv2.rectangle(frame_with_boxes, (left, top), (right, bottom), (0, 255, 0), 2)
+
+            # Draw the name (or "Unknown") below the face
+            cv2.rectangle(frame_with_boxes, (left, bottom - 35), (right, bottom), (0, 255, 0), cv2.FILLED)
+            font = cv2.FONT_HERSHEY_DUPLEX
+            cv2.putText(frame_with_boxes, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
+
+        # Convert the frame with boxes to RGB for displaying in Tkinter
+        img_with_boxes_rgb = cv2.cvtColor(frame_with_boxes, cv2.COLOR_BGR2RGB)
+        imgtk_with_boxes = ImageTk.PhotoImage(image=Image.fromarray(img_with_boxes_rgb))
+
+        # Update the webcam label to show the frame with boxes and names
+        self._label.imgtk = imgtk_with_boxes
+        self._label.configure(image=imgtk_with_boxes)
+
+        # Display all recognized names in the result label
+        self.result_label.config(text=f"Recognized: {', '.join(names)}", fg="green" if "Unknown" not in names else "red")
 
     def register_new_user(self):
         self.register_new_user_window = tk.Toplevel(self.main_window)
